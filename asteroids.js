@@ -1,5 +1,5 @@
 
-// Asteroid
+// ***************** ASTEROID **********************
 var Asteroid = function(x_pos, y_pos, x_vel, y_vel, radius, game) {
 
   var that = this;
@@ -32,6 +32,7 @@ var Asteroid = function(x_pos, y_pos, x_vel, y_vel, radius, game) {
 
 }
 
+// ***************** Global Function(s) **********************
 var wrapCoords = function(coord, board_dim){
   if(coord % board_dim > 0){
     return coord % board_dim;
@@ -40,9 +41,23 @@ var wrapCoords = function(coord, board_dim){
   }
 }
 
-var Ship = function(x_pos, y_pos, radius) {
+var isHit = function(hitter, hittee) {
+  // console.log("Hit???");
+  var distance = Math.sqrt(Math.pow((hitter.pos.x - hittee.pos.x), 2) + Math.pow((hitter.pos.y - hittee.pos.y), 2) );
+  // console.log(hitter);
+  // console.log(hittee);
+  if (distance < hitter.radius + hittee.radius ) {
+    return true;
+  }
+  return false;
+}
+
+// ***************** SHIP **********************
+var Ship = function(x_pos, y_pos, radius, game) {
 
   var that = this;
+  that.game = game;
+  that.direction = Math.PI/2;
 
   that.pos = {
     x: x_pos,
@@ -87,17 +102,41 @@ var Ship = function(x_pos, y_pos, radius) {
     that.pos.y = wrapCoords(that.pos.y + that.vel.y, game.Y_SIZE );
   }
 
-  that.isHit = function() {
-    for(var j = 0; j < 10; j++) {
-      var distance = Math.sqrt(Math.pow((game.asteroids[j].pos.x - that.pos.x), 2) + Math.pow((game.asteroids[j].pos.y - that.pos.y), 2) )
-      if (distance < game.asteroids[j].radius + that.radius ) {
-        return true;
-      }
-    }
-    return false;
+}
+
+// ***************** BULLET **********************
+var Bullet = function(ship, game){
+
+  var that = this;
+  that.game = game;
+  that.direction = ship.direction;
+  that.radius = game.BULLET_SIZE;
+
+  that.pos = {
+    x: ship.pos.x + game.SHIP_RADIUS*Math.cos(that.direction),
+    y: ship.pos.y - game.SHIP_RADIUS*Math.sin(that.direction)
+  }
+
+  that.vel = {
+    x: ship.vel.x + Math.cos(ship.direction) * game.BULLET_SPEED,
+    y: ship.vel.y - Math.sin(ship.direction) * game.BULLET_SPEED
+  }
+
+  that.draw = function(){
+    ctx.beginPath();
+    ctx.arc(that.pos.x, that.pos.y, game.BULLET_SIZE, 0, 2 * Math.PI, false);
+    ctx.fillStyle = "#FF0";
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  that.update = function(){
+    that.pos.x = wrapCoords(that.pos.x + that.vel.x, game.X_SIZE );
+    that.pos.y = wrapCoords(that.pos.y + that.vel.y, game.Y_SIZE );
   }
 }
 
+// ***************** GAME **********************
 var Game = function(ctx) {
 
   var that = this;
@@ -110,8 +149,11 @@ var Game = function(ctx) {
   that.ASTEROID_MIN = 5;
   that.SHIP_RADIUS = 15;
   that.POWER = 3;
+  that.BULLET_SPEED = that.VELOCITY*3
+  that.BULLET_SIZE = 2;
 
   that.asteroids = [];
+  that.bullets = [];
 
   that.createAsteroids = function() {
     for(var i=0; i<10; i++) {
@@ -129,7 +171,7 @@ var Game = function(ctx) {
     var y_pos = that.Y_SIZE/2;
     var radius = that.SHIP_RADIUS;
     //add direction here
-    return new Ship(x_pos, y_pos, radius);
+    return new Ship(x_pos, y_pos, radius, that);
   }
 
   that.drawAsteroids = function () {
@@ -138,10 +180,17 @@ var Game = function(ctx) {
     }
   }
 
+  that.drawBullets = function() {
+    for(var i=0; i<that.bullets.length; i++) {
+      that.bullets[i].draw(ctx);
+    }
+  }
+
   that.draw = function(){
     ctx.clearRect(0, 0, that.X_SIZE, that.Y_SIZE);
     that.drawAsteroids();
     that.ship.draw(ctx);
+    that.drawBullets();
   }
 
   that.update = function() {
@@ -149,12 +198,41 @@ var Game = function(ctx) {
       asteroid.update();
     });
     that.ship.update();
+    $.each(that.bullets, function(i, bullet){
+      bullet.update();
+    });
+  }
+
+  that.checkBulletHits = function() {
+    console.log("BH's");
+
+    var destroyedAsteroids = [];
+    var destroyedBullets = [];
+    for(var i=0; i < that.asteroids.length; i++) {
+      for(var j=0; j < that.bullets.length; j++) {
+          console.log(isHit(that.bullets[j], that.asteroids[i]));
+        if(isHit(that.bullets[j], that.asteroids[i])){
+          destroyedAsteroids.push(that.asteroids[i]);
+          destroyedBullets.push(that.bullets[i]);
+        }
+      }
+    }
+    // subtract away destroyed arrays from the main arrays
+    that.bullets = that.bullets.filter(function(b){
+      return ( destroyedBullets.indexOf(b) == -1 );
+    });
+    that.asteroids = that.asteroids.filter(function(a){
+      return ( destroyedAsteroids.indexOf(a) == -1 );
+    });
+    //console.log("tired yet?");
   }
 
   that.gameOver = function(){
-    if (that.ship.isHit()) {
-      clearInterval(that.interval);
-      alert("You lose!!!!");
+    for(var i=0; i < that.asteroids.length; i++) {
+      if (isHit(that.asteroids[i], that.ship)) {
+        clearInterval(that.interval);
+        alert("You lose!!!!");
+      }
     }
   }
 
@@ -171,6 +249,9 @@ var Game = function(ctx) {
     key('right', function(){
       that.ship.power(that.POWER, 0);
     });
+    key('space', function(){
+      that.bullets.push(new Bullet(that.ship, that));
+    });
   }
 
   that.playGame = function(){
@@ -181,6 +262,7 @@ var Game = function(ctx) {
     that.bindKeys();
     that.interval = setInterval(function(){
       that.update();
+      that.checkBulletHits();
       that.draw();
       that.gameOver();
     }, that.INTERVAL);
