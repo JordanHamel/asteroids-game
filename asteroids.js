@@ -1,4 +1,5 @@
 
+
 // ***************** ASTEROID **********************
 var Asteroid = function(x_pos, y_pos, x_vel, y_vel, radius, game) {
 
@@ -269,7 +270,7 @@ var Game = function(ctx) {
   }
 
 
-  // SCRIPT FOR RUNNING SHIT
+  //script
 
   that.playGame();
 
